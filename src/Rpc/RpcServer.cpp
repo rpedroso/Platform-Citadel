@@ -616,7 +616,8 @@ bool RpcServer::f_on_block_json(const F_COMMAND_RPC_GET_BLOCK_DETAILS::request& 
   uint64_t currentReward = 0;
   int64_t emissionChange = 0;
   bool penalizeFee = blk.majorVersion >= 2;
-  size_t blockGrantedFullRewardZone = penalizeFee ?
+  size_t blockGrantedFullRewardZone = 0;
+  blockGrantedFullRewardZone = penalizeFee ?
   m_core.currency().blockGrantedFullRewardZone() :
   //m_core.currency().blockGrantedFullRewardZoneV1();
   res.block.effectiveSizeMedian = std::max(res.block.sizeMedian, blockGrantedFullRewardZone);
@@ -757,7 +758,7 @@ bool RpcServer::f_on_transaction_json(const F_COMMAND_RPC_GET_TRANSACTION_DETAIL
 
 bool RpcServer::f_on_pool_json(const F_COMMAND_RPC_GET_POOL::request& req, F_COMMAND_RPC_GET_POOL::response& res) {
   auto pool = m_core.getPoolTransactions();
-  for (const Transaction tx : pool) {
+  for (const Transaction &tx : pool) {
     f_transaction_short_response transaction_short;
   
     uint64_t amount_in = getInputAmount(tx);

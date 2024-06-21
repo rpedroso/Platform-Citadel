@@ -707,7 +707,7 @@ uint64_t WalletTransactionSender::selectDepositTransfers(const std::vector<Depos
       selectedTransfers.push_back(std::move(transfer));
     }
 
-    Deposit deposit;
+    Deposit deposit = {};
     bool r = m_transactionsCache.getDeposit(id, deposit);
     assert(r);
 

@@ -1338,7 +1338,7 @@ uint32_t Blockchain::findBlockchainSupplement(const std::vector<Crypto::Hash>& q
   assert(qblock_ids.back() == m_blockIndex.getBlockId(0));
 
   std::lock_guard<decltype(m_blockchain_lock)> lk(m_blockchain_lock);
-  uint32_t blockIndex;
+  uint32_t blockIndex = 0;
   // assert above guarantees that method returns true
   m_blockIndex.findSupplement(qblock_ids, blockIndex);
   return blockIndex;

@@ -570,6 +570,27 @@ TransactionId WalletLegacy::sendTransaction(const std::vector<WalletLegacyTransf
   return txId;
 }
 
+size_t WalletLegacy::estimateFusion(const uint64_t& threshold) {
+  size_t fusionReadyCount = 0;
+  std::vector<TransactionOutputInformation> outputs;
+  m_transferDetails->getOutputs(outputs, ITransfersContainer::IncludeKeyUnlocked);
+  std::array<size_t, std::numeric_limits<uint64_t>::digits10 + 1> bucketSizes;
+  bucketSizes.fill(0);
+  for (auto& out : outputs) {
+    uint8_t powerOfTen = 0;
+	if (m_currency.isAmountApplicableInFusionTransactionInput(out.amount, threshold, powerOfTen)) { //, m_node.getLastKnownBlockHeight())) {
+      assert(powerOfTen < std::numeric_limits<uint64_t>::digits10 + 1);
+      bucketSizes[powerOfTen]++;
+      std::cout << out.amount << " : " << threshold << "\n";
+	}
+  }
+  for (auto bucketSize : bucketSizes) {
+    if (bucketSize >= m_currency.fusionTxMinInputCount()) {
+      fusionReadyCount += bucketSize;
+    }
+  }
+  return fusionReadyCount;
+}
 TransactionId WalletLegacy::deposit(uint32_t term, uint64_t amount, uint64_t fee, uint64_t mixIn) {
   throwIfNotInitialised();
 

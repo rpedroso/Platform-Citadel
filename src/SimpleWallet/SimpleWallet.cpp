@@ -599,6 +599,7 @@ simple_wallet::simple_wallet(System::Dispatcher& dispatcher, const CryptoNote::C
   m_consoleHandler.setHandler("reset", boost::bind(&simple_wallet::reset, this, _1), "Discard cache data and start synchronizing from the start");
   m_consoleHandler.setHandler("help", boost::bind(&simple_wallet::help, this, _1), "Show this help");
   m_consoleHandler.setHandler("exit", boost::bind(&simple_wallet::exit, this, _1), "Close wallet");
+  m_consoleHandler.setHandler("estimate_fusion", boost::bind(&simple_wallet::estimate_fusion, this, _1), "Show the number of outputs available for optimization for a given <threshold>");
 }
 //----------------------------------------------------------------------------------------------------
 bool simple_wallet::set_log(const std::vector<std::string> &args) {
@@ -1682,3 +1683,32 @@ int main(int argc, char* argv[]) {
   return 1;
   //CATCH_ENTRY_L0("main", 1);
 }
+
+bool simple_wallet::estimate_fusion(const std::vector<std::string>& args) {
+	uint64_t fusionThreshold = 0;
+	if (0 == args.size()) {
+		fusionThreshold = m_currency.defaultDustThreshold() + 1;
+	}
+	else {
+		ArgumentReader<std::vector<std::string>::const_iterator> ar(args.begin(), args.end());
+		auto arg = ar.next();
+		bool ok = m_currency.parseAmount(arg, fusionThreshold);
+		if (!ok || 0 == fusionThreshold) {
+			fusionThreshold = m_currency.defaultDustThreshold() + 1;
+		}
+		if (fusionThreshold <= m_currency.defaultDustThreshold()) {
+			fail_msg_writer() << "Fusion transaction threshold is too small. Threshold " << m_currency.formatAmount(fusionThreshold) <<
+				", minimum threshold " << m_currency.formatAmount(m_currency.defaultDustThreshold() + 1);
+		}
+	}
+	try {
+		size_t fusionReadyCount = m_wallet->estimateFusion(fusionThreshold);
+		success_msg_writer() << "Fusion ready outputs count: " << fusionReadyCount;
+	}
+	catch (std::exception &e) {
+		fail_msg_writer() << "failed to estimate fusion ready count: " << e.what();
+	}
+
+	return true;
+}
+

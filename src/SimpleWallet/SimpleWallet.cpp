@@ -1694,8 +1694,7 @@ bool simple_wallet::estimate_fusion(const std::vector<std::string>& args) {
 		ArgumentReader<std::vector<std::string>::const_iterator> ar(args.begin(), args.end());
 		auto arg = ar.next();
 		bool ok = m_currency.parseAmount(arg, fusionThreshold);
-		if (!ok) { // || 0 == fusionThreshold) {
-			// fusionThreshold = m_currency.defaultDustThreshold() + 1;
+		if (!ok) {
 			fail_msg_writer() << "Fusion transaction threshold invalid.";
       return false;
 		}
@@ -1736,14 +1735,6 @@ bool simple_wallet::optimize(const std::vector<std::string>& args) {
 			logger(ERROR, BRIGHT_RED) << "mixin_count should be non-negative integer, got " << mixin_str;
 			return false;
 		}
-		// if (mixIn < m_currency.minMixin() && mixIn != 0) {
-		// 	logger(ERROR, BRIGHT_RED) << "mixIn should be equal to or bigger than " << m_currency.minMixin();
-		// 	return false;
-		// }
-		// if (mixIn > m_currency.maxMixin()) {
-		// 	logger(ERROR, BRIGHT_RED) << "mixIn should be equal to or less than " << m_currency.maxMixin();
-		// 	return false;
-		// }
 	}
 	else {
 		fusionThreshold = m_currency.defaultDustThreshold() + 1;
@@ -1764,7 +1755,6 @@ bool simple_wallet::optimize(const std::vector<std::string>& args) {
 		fail_msg_writer() << "Fusion transaction mixin is too big " << mixIn;
 	}
 
-  std::cout << "AQUI\n";
 	std::vector<TransactionOutputInformation> fusionInputs = m_wallet->selectFusionTransfersToSend(fusionThreshold, m_currency.fusionTxMinInputCount(), estimatedFusionInputsCount);
 	if (fusionInputs.size() < m_currency.fusionTxMinInputCount()) {
 		//nothing to optimize

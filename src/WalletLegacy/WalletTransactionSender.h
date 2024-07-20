@@ -35,6 +35,15 @@ public:
                                                  const std::vector<TransactionMessage>& messages = std::vector<TransactionMessage>(),
                                                  uint64_t ttl = 0);
 
+  std::unique_ptr<WalletRequest> makeSendFusionRequest(TransactionId& transactionId, std::deque<std::unique_ptr<WalletLegacyEvent>>& events,
+                                                       const std::vector<WalletLegacyTransfer>& transfers,
+                                                       const std::vector<TransactionOutputInformation>& fusionInputs,
+                                                       uint64_t fee,
+                                                       const std::string& extra = "",
+                                                       uint64_t mixIn = 0,
+                                                       uint64_t unlockTimestamp = 0);
+
+
   std::unique_ptr<WalletRequest> makeDepositRequest(TransactionId& transactionId,
                                                     std::deque<std::unique_ptr<WalletLegacyEvent>>& events,
                                                     uint64_t term,

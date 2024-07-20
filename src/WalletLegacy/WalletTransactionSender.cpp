@@ -244,6 +244,37 @@ std::unique_ptr<WalletRequest> WalletTransactionSender::makeDepositRequest(Trans
   return doSendMultisigTransaction(std::move(context), events);
 }
 
+std::unique_ptr<WalletRequest> WalletTransactionSender::makeSendFusionRequest(TransactionId& transactionId,
+                                                                              std::deque<std::unique_ptr<WalletLegacyEvent>>& events,
+                                                                              const std::vector<WalletLegacyTransfer>& transfers,
+                                                                              const std::vector<TransactionOutputInformation>& fusionInputs,
+                                                                              uint64_t fee,
+                                                                              const std::string& extra,
+                                                                              uint64_t mixIn,
+                                                                              uint64_t unlockTimestamp) {
+	throwIf(transfers.empty(), error::ZERO_DESTINATION);
+	validateTransfersAddresses(transfers);
+	uint64_t neededMoney = countNeededMoney(fee, transfers);
+
+	std::shared_ptr<SendTransactionContext> context = std::make_shared<SendTransactionContext>();
+
+	for (auto& out : fusionInputs) {
+		context->foundMoney += out.amount;
+	}
+	throwIf(context->foundMoney < neededMoney, error::WRONG_AMOUNT);
+	context->selectedTransfers = fusionInputs;
+
+	transactionId = m_transactionsCache.addNewTransaction(neededMoney, fee, extra, transfers, unlockTimestamp, {});
+	context->transactionId = transactionId;
+	context->mixIn = mixIn;
+
+	if (context->mixIn) {
+		return makeGetRandomOutsRequest(std::move(context), false);
+	}
+
+	return doSendTransaction(std::move(context), events);
+}
+
 std::unique_ptr<WalletRequest> WalletTransactionSender::makeWithdrawDepositRequest(TransactionId& transactionId,
                                                                                    std::deque<std::unique_ptr<WalletLegacyEvent>>& events,
                                                                                    const std::vector<DepositId>& depositIds,

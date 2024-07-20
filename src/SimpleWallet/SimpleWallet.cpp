@@ -600,6 +600,7 @@ simple_wallet::simple_wallet(System::Dispatcher& dispatcher, const CryptoNote::C
   m_consoleHandler.setHandler("help", boost::bind(&simple_wallet::help, this, _1), "Show this help");
   m_consoleHandler.setHandler("exit", boost::bind(&simple_wallet::exit, this, _1), "Close wallet");
   m_consoleHandler.setHandler("estimate_fusion", boost::bind(&simple_wallet::estimate_fusion, this, _1), "Show the number of outputs available for optimization for a given <threshold>");
+  m_consoleHandler.setHandler("optimize", boost::bind(&simple_wallet::optimize, this, _1), "Optimize wallet (fuse small outputs into fewer larger ones) - optimize <threshold> <mixin>");
 }
 //----------------------------------------------------------------------------------------------------
 bool simple_wallet::set_log(const std::vector<std::string> &args) {
@@ -1693,12 +1694,15 @@ bool simple_wallet::estimate_fusion(const std::vector<std::string>& args) {
 		ArgumentReader<std::vector<std::string>::const_iterator> ar(args.begin(), args.end());
 		auto arg = ar.next();
 		bool ok = m_currency.parseAmount(arg, fusionThreshold);
-		if (!ok || 0 == fusionThreshold) {
-			fusionThreshold = m_currency.defaultDustThreshold() + 1;
+		if (!ok) { // || 0 == fusionThreshold) {
+			// fusionThreshold = m_currency.defaultDustThreshold() + 1;
+			fail_msg_writer() << "Fusion transaction threshold invalid.";
+      return false;
 		}
 		if (fusionThreshold <= m_currency.defaultDustThreshold()) {
 			fail_msg_writer() << "Fusion transaction threshold is too small. Threshold " << m_currency.formatAmount(fusionThreshold) <<
 				", minimum threshold " << m_currency.formatAmount(m_currency.defaultDustThreshold() + 1);
+      return false;
 		}
 	}
 	try {
@@ -1712,3 +1716,104 @@ bool simple_wallet::estimate_fusion(const std::vector<std::string>& args) {
 	return true;
 }
 
+bool simple_wallet::optimize(const std::vector<std::string>& args) {
+	// if (m_trackingWallet) {
+	// 	fail_msg_writer() << "This is tracking wallet. Spending is impossible.";
+	// 	return true;
+	// }
+	const size_t MAX_FUSION_OUTPUT_COUNT = 4;
+	uint64_t fusionThreshold = 0;
+	uint64_t mixIn = 0;
+	std::string threshold_str;
+	if (args.size() == 1) {
+		threshold_str = args[0];
+		mixIn = 3;
+	}
+	else if (args.size() == 2) {
+		threshold_str = args[0];
+		std::string mixin_str = args[1];
+		if (!Common::fromString(mixin_str, mixIn)) {
+			logger(ERROR, BRIGHT_RED) << "mixin_count should be non-negative integer, got " << mixin_str;
+			return false;
+		}
+		// if (mixIn < m_currency.minMixin() && mixIn != 0) {
+		// 	logger(ERROR, BRIGHT_RED) << "mixIn should be equal to or bigger than " << m_currency.minMixin();
+		// 	return false;
+		// }
+		// if (mixIn > m_currency.maxMixin()) {
+		// 	logger(ERROR, BRIGHT_RED) << "mixIn should be equal to or less than " << m_currency.maxMixin();
+		// 	return false;
+		// }
+	}
+	else {
+		fusionThreshold = m_currency.defaultDustThreshold() + 1;
+		mixIn = 3;
+	}
+
+	bool ok = m_currency.parseAmount(threshold_str, fusionThreshold);
+	if (!ok || 0 == fusionThreshold) {
+		fusionThreshold = m_currency.defaultDustThreshold() + 1;
+	}
+	if (fusionThreshold <= m_currency.defaultDustThreshold()) {
+		fail_msg_writer() << "Fusion transaction threshold is too small. Threshold " << m_currency.formatAmount(fusionThreshold) <<
+			", minimum threshold " << m_currency.formatAmount(m_currency.defaultDustThreshold() + 1);
+	}
+
+	size_t estimatedFusionInputsCount = m_currency.getApproximateMaximumInputCount(m_currency.fusionTxMaxSize(), MAX_FUSION_OUTPUT_COUNT, mixIn);
+	if (estimatedFusionInputsCount < m_currency.fusionTxMinInputCount()) {
+		fail_msg_writer() << "Fusion transaction mixin is too big " << mixIn;
+	}
+
+  std::cout << "AQUI\n";
+	std::vector<TransactionOutputInformation> fusionInputs = m_wallet->selectFusionTransfersToSend(fusionThreshold, m_currency.fusionTxMinInputCount(), estimatedFusionInputsCount);
+	if (fusionInputs.size() < m_currency.fusionTxMinInputCount()) {
+		//nothing to optimize
+		fail_msg_writer() << "Fusion transaction not created: nothing to optimize for threshold " << m_currency.formatAmount(fusionThreshold);
+		return true;
+	}
+
+	try {
+		CryptoNote::WalletHelper::SendCompleteResultObserver sent;
+		std::string extraString;
+
+		WalletHelper::IWalletRemoveObserverGuard removeGuard(*m_wallet, sent);
+
+		CryptoNote::TransactionId tx = m_wallet->sendFusionTransaction(fusionInputs, 0, extraString, mixIn, 0);
+		if (tx == WALLET_LEGACY_INVALID_TRANSACTION_ID) {
+			fail_msg_writer() << "Can't send money";
+			return true;
+		}
+
+		std::error_code sendError = sent.wait(tx);
+		removeGuard.removeObserver();
+
+		if (sendError) {
+			fail_msg_writer() << sendError.message();
+			return true;
+		}
+
+		CryptoNote::WalletLegacyTransaction txInfo;
+		m_wallet->getTransaction(tx, txInfo);
+		success_msg_writer(true) << "Fusion transaction (threshold=" << m_currency.formatAmount(fusionThreshold) \
+      << ", mixin=" << mixIn << ") with " << fusionInputs.size() << " outputs successfully sent, hash: " << Common::podToHex(txInfo.hash);
+
+		try {
+			CryptoNote::WalletHelper::storeWallet(*m_wallet, m_wallet_file);
+		}
+		catch (const std::exception& e) {
+			fail_msg_writer() << e.what();
+			return true;
+		}
+	}
+	catch (const std::system_error& e) {
+		fail_msg_writer() << e.what();
+	}
+	catch (const std::exception& e) {
+		fail_msg_writer() << e.what();
+	}
+	catch (...) {
+		fail_msg_writer() << "unknown error";
+	}
+
+	return true;
+}
